@@ -3,15 +3,51 @@
 import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, X, ImageIcon } from "lucide-react"
+import { Upload, X, ImageIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+// transformer.js stuff
+import { pipeline, RawImage, matmul } from "@huggingface/transformers"
+const MODEL_ID = "onnx-community/dinov3-vits16-pretrain-lvd1689m-ONNX";
+const EXAMPLE_IMAGE_URL = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/cats.png";
+
 
 export default function HomePage() {
-  const [dragActive, setDragActive] = useState(false)
   const [files, setFiles] = useState([])
+
+  // ui state
+  const [dragActive, setDragActive] = useState(false)
+  const [modelReady, setModelReady] = useState(false)
+  const [status, setStatus] = useState("")
+  const [busy, setBusy] = useState(false)
 
   async function processFile(imageFile) {
     const blob = new Blob([imageFile], { type: imageFile.type });
+    // do something ..
+  }
 
+  async function loadModel() {
+    setBusy(true)
+    setStatus("Loading DINO ..")
+
+    try {
+      const extractor = await pipeline("image-feature-extraction", MODEL_ID,
+       {
+        "device": "wasm",
+        "dtype": "q4",
+      });
+      extractor.processor.image_processor.do_resize = false;
+      const patchSize = extractor.model.config.patch_size;
+      const device = extractor.model.sessions.model.config.device
+      const dtype = extractor.model.sessions.model.config.dtype
+
+      setStatus(`Model ready on device ${device} (${dtype}) patch size ${patchSize}. Select an image.`);
+    } catch (error) {
+      setStatus("Failed to load the model. Please refresh.");
+      console.error("Model loading error:", error);
+    }
+
+    setBusy(false)
   }
 
   useEffect(() => {
@@ -19,6 +55,12 @@ export default function HomePage() {
       processFile(files[0])
     }
   }, [files]); 
+
+  useEffect(() => {
+    if (!modelReady) {
+      loadModel()
+    }
+  }, []); 
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -59,6 +101,18 @@ export default function HomePage() {
           <h1 className="text-3xl font-bold text-foreground">Image Upload</h1>
           <p className="text-muted-foreground">Drag and drop your images or click to browse</p>
         </div>
+
+        {/* STATUS */}
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-0 m-0">
+            <div className="flex items-center justify-center space-x-3">
+              {busy && <Loader2 className="w-5 h-5 animate-spin" />}
+              <p className={cn("font-medium", "")}>
+                {status}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-2 border-dashed transition-colors duration-200 hover:border-primary/50">
           <CardContent className="p-8">
