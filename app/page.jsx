@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, X, ImageIcon, Loader2, CheckCircle, AlertCircle, RotateCcw, Squirrel } from "lucide-react"
+import { Upload, X, ImageIcon, Loader2, Github, CheckCircle, AlertCircle, RotateCcw, Squirrel } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // transformer.js stuff
@@ -171,7 +171,7 @@ export default function HomePage() {
     const maxScore = Math.max(...patchScores)
     patchScores = patchSimScoresRef.current[queryPatchIdx].map(value => (value - minScore) / (maxScore - minScore))
 
-    // Overlau all patches with (1-score)% darkness
+    // Overlay all patches with (1-score)% darkness
     for (let patchIdx = 0; patchIdx < patchScores.length; patchIdx++) {
       const patchScore = patchScores[patchIdx] - minScore + (1-maxScore)
       const patchCoords = {
@@ -282,6 +282,18 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-2xl mx-auto space-y-8">
+        {/* GITHUB BANNER */}
+        <div className="absolute top-4 right-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open('https://github.com/geronimi73/next-dino', '_blank')}
+          >
+            <Github className="w-4 h-4 mr-2" />
+            View on GitHub
+          </Button>
+        </div>
+
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-foreground">DINOv3 Demo</h1>
           <p className="text-muted-foreground">Drag and drop your images or click to browse</p>
