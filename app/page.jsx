@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Upload, X, ImageIcon } from "lucide-react"
@@ -8,6 +8,17 @@ import { Upload, X, ImageIcon } from "lucide-react"
 export default function HomePage() {
   const [dragActive, setDragActive] = useState(false)
   const [files, setFiles] = useState([])
+
+  async function processFile(imageFile) {
+    const blob = new Blob([imageFile], { type: imageFile.type });
+
+  }
+
+  useEffect(() => {
+    if (files.length > 0) {
+      processFile(files[0])
+    }
+  }, [files]); 
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -62,7 +73,7 @@ export default function HomePage() {
             >
               <input
                 type="file"
-                multiple
+                // multiple
                 accept="image/*"
                 onChange={handleFileInput}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -86,46 +97,6 @@ export default function HomePage() {
             </div>
           </CardContent>
         </Card>
-
-        {files.length > 0 && (
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-4 text-foreground">Selected Images ({files.length})</h3>
-
-              <div className="space-y-3">
-                {files.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 text-muted-foreground">
-                        <ImageIcon className="w-full h-full" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeFile(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <Button variant="outline" onClick={() => setFiles([])}>
-                  Clear All
-                </Button>
-                <Button>Process Images</Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   )
