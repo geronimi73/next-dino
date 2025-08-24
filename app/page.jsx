@@ -10,9 +10,6 @@ import { cn } from "@/lib/utils"
 import { pipeline, RawImage, matmul, env } from "@huggingface/transformers"
 const MODEL_ID = "onnx-community/dinov3-vits16-pretrain-lvd1689m-ONNX";
 const PATCH_SIZE = 16
-const EXAMPLE_IMAGE_URL = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/cats.png";
-
-const DEFAULT_FILE = "/samples/image_05.jpg"
 
 export default function HomePage() {
 
@@ -22,12 +19,13 @@ export default function HomePage() {
   const [status, setStatus] = useState("")
   const [busy, setBusy] = useState(false)
   const [file, setFile] = useState(null)
-  const [imageReady, setImageReady] = useState(false)
-  const [patchSimScores, setPatchSimScores] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageProcessed, setImageProcessed] = useState(false)
 
   const offscreenCanvasRef = useRef(null)
   const canvasRef = useRef(null)
   const extractorRef = useRef(null)
+  const patchSimScoresRef = useRef(null)
 
   // process image 
   async function processImage() {
@@ -44,8 +42,10 @@ export default function HomePage() {
     const normalizedFeatures = patchFeatures.normalize(2, -1);
     const scores = await matmul(normalizedFeatures, normalizedFeatures.permute(0, 2, 1));
     const similarityScores = (await scores.tolist())[0];
-    setPatchSimScores(similarityScores)
 
+    patchSimScoresRef.current = similarityScores
+
+    setImageProcessed(true)
     setBusy(false)
     setStatus(`Done (${similarityScores.length} patches). Move around`)
   }
@@ -71,23 +71,29 @@ export default function HomePage() {
     img.src = URL.createObjectURL(file)
     await img.decode()
 
-    // resize if necessary
-    const isMobile = /Mobi|Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    );
-    const maxPixels = isMobile ? 1048576 : 2097152;
-    const currPixels = img.naturalWidth * img.naturalHeight
+    // actual image size, but ..
     let newDim = {
       width: img.naturalWidth,
       height: img.naturalHeight,
     }
+
+    // .. resize if > max. pixels for device
+    const isMobile = /Mobi|Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    );
+    const maxPixels = isMobile ? 1048576 : 2097152;
+    const currPixels = img.naturalWidth * img.naturalHeight    
     if (currPixels > maxPixels) {
       const scaleF = Math.sqrt(maxPixels / currPixels)
       newDim.width = Math.floor(scaleF * newDim.width)
       newDim.height = Math.floor(scaleF * newDim.height)
 
       console.log(`${img.naturalWidth}x${img.naturalHeight} image resized to ${newDim.width}x${newDim.height}`)
-    }
+    } 
+
+    // and resize to closest-lowest multiple of patch size
+    newDim.width = Math.floor(newDim.width / PATCH_SIZE) * PATCH_SIZE
+    newDim.height = Math.floor(newDim.height / PATCH_SIZE) * PATCH_SIZE
 
     // draw original image onto offscreen screnvas
     const offscreenCanvas = document.createElement('canvas');
@@ -106,7 +112,7 @@ export default function HomePage() {
     canvas.height = newDim.height
     redrawCanvas()
 
-    setImageReady(true)
+    setImageLoaded(true)
   }
 
   async function loadModel() {
@@ -136,43 +142,61 @@ export default function HomePage() {
   }
 
   async function loadExampleImage() {
-    let imageFile = await fetch(DEFAULT_FILE)
+    let imageFile = await fetch("/samples/cats.jpg")
     imageFile = await imageFile.blob()
     setFile(imageFile)
   }
 
   function updateHeatmap(mousePos) {
+    // draw originial image
     redrawCanvas()
 
+    // Get onscreen canvas and ctx
     const canvas = canvasRef.current
     const ctx = canvas.getContext("2d")
+    ctx.save()
 
-    const patchesPerRow = canvas.width / PATCH_SIZE
-    const currPatchIdx = Math.floor(mousePos.y / PATCH_SIZE) * patchesPerRow + Math.floor(mousePos.x / PATCH_SIZE);
+    // Get idx of hovered patch 
+    const patchesPerRow = Math.ceil(canvas.width / PATCH_SIZE)
+    const queryPatchIdx = Math.floor(mousePos.y / PATCH_SIZE) * patchesPerRow + Math.floor(mousePos.x / PATCH_SIZE);
 
-    const currPatchCoords = {
-      x: (currPatchIdx % patchesPerRow) * PATCH_SIZE,
-      y: Math.floor(currPatchIdx / patchesPerRow) * PATCH_SIZE,
+    // Get scores of queryPatch vs all others, normalize scores [0, 1]
+    let patchScores = patchSimScoresRef.current[queryPatchIdx]
+    const minScore = Math.min(...patchScores)
+    const maxScore = Math.max(...patchScores)
+    patchScores = patchSimScoresRef.current[queryPatchIdx].map(value => (value - minScore) / (maxScore - minScore))
+
+    // Overlau all patches with (1-score)% darkness
+    for (let patchIdx = 0; patchIdx < patchScores.length; patchIdx++) {
+      const patchScore = patchScores[patchIdx] - minScore + (1-maxScore)
+      const patchCoords = {
+        x: (patchIdx % patchesPerRow) * PATCH_SIZE,
+        y: Math.floor(patchIdx / patchesPerRow) * PATCH_SIZE,
+      }
+
+      const darkness = (1 - patchScore) * 0.8
+
+      ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`
+      ctx.fillRect(patchCoords.x, patchCoords.y, PATCH_SIZE, PATCH_SIZE)        
     }
+    ctx.restore()
 
-    ctx.globalAlpha = 0.1; // 50% transparency
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(currPatchCoords.x, currPatchCoords.y, PATCH_SIZE, PATCH_SIZE);
-    ctx.globalAlpha = 1.0; 
   }
 
   function resetUI() {
     setFile(null)
-    setImageReady(false)
+    setImageLoaded(false)
+    setImageProcessed(false)
+    patchSimScoresRef.current = null
   }
 
   // model+image ready -> process
   useEffect(() => {
-    if (modelReady && imageReady) {
+    if (modelReady && imageLoaded) {
       // disable for now
-      // processImage()
+      processImage()
     }
-  }, [modelReady, imageReady]); 
+  }, [modelReady, imageLoaded]); 
 
   // file is read -> draw image onto canvas
   useEffect(() => {
@@ -191,7 +215,11 @@ export default function HomePage() {
   // attach mousemove handler to canvas
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    let animationFrameId = null
+
+    if (!canvas || !imageProcessed) {
+      return
+    }
 
     const handleMouseMove = (e) => {
       const rect = canvas.getBoundingClientRect()
@@ -200,15 +228,24 @@ export default function HomePage() {
         y: (e.clientY - rect.top) * (canvas.height / rect.height)
       }
 
-      requestAnimationFrame(() => {updateHeatmap(mousePos)})
+      animationFrameId = requestAnimationFrame(() => {updateHeatmap(mousePos)})
+    }
+
+    const handleMouseOut = (e) => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      redrawCanvas()
     }
 
     canvas.addEventListener('mousemove', handleMouseMove)
+    canvas.addEventListener('mouseout', handleMouseOut)
     
     return () => {
       canvas.removeEventListener('mousemove', handleMouseMove)
+      canvas.removeEventListener('mouseout', handleMouseOut)
     }
-  }, [imageReady]) // Re-attach when image changes
+  }, [imageProcessed]) // Re-attach when image changes
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
