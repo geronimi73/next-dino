@@ -32,6 +32,10 @@ export default function HomePage() {
     setBusy(true)
     setStatus("Processing image ..")
 
+    // sleep, terrible solution to allow the UI to update
+    // workaround till webworker implemented
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     const extractor = extractorRef.current
 
     const imageData = await RawImage.fromCanvas(canvasRef.current);
@@ -120,9 +124,10 @@ export default function HomePage() {
     setStatus("Loading DINO ..")
 
     try {
+      const isWebGpuSupported = !!navigator.gpu;
       const extractor = await pipeline("image-feature-extraction", MODEL_ID,
        {
-        "device": "webgpu",
+        "device": isWebGpuSupported ? "webgpu" : "wasm",
         "dtype": "q4",
       });
       extractorRef.current = extractor
@@ -142,7 +147,7 @@ export default function HomePage() {
   }
 
   async function loadExampleImage() {
-    let imageFile = await fetch("/samples/cats.jpg")
+    let imageFile = await fetch("/samples/frutas2.jpg")
     imageFile = await imageFile.blob()
     setFile(imageFile)
   }
@@ -184,6 +189,7 @@ export default function HomePage() {
   }
 
   function resetUI() {
+    setStatus("Select an image.")
     setFile(null)
     setImageLoaded(false)
     setImageProcessed(false)
