@@ -7,7 +7,7 @@ import { Upload, X, ImageIcon, Loader2, Github, CheckCircle, AlertCircle, Rotate
 import { cn } from "@/lib/utils"
 
 // transformer.js stuff
-import { pipeline, RawImage, matmul, env } from "@huggingface/transformers"
+import { RawImage } from "@huggingface/transformers"
 const MODEL_ID = "onnx-community/dinov3-vits16-pretrain-lvd1689m-ONNX";
 const PATCH_SIZE = 16
 
@@ -28,32 +28,21 @@ export default function HomePage() {
   const canvasRef = useRef(null)
   const extractorRef = useRef(null)
   const patchSimScoresRef = useRef(null)
+  const dinoRef = useRef(null)
 
   // process image 
   async function processImage() {
     setBusy(true)
     setStatus("Processing image ..")
 
-    // sleep, terrible solution to allow the UI to update
-    // workaround till webworker implemented
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    const extractor = extractorRef.current
-
+    // canvas -> transformers.js RawImage
     const imageData = await RawImage.fromCanvas(canvasRef.current);
-    const features = await extractor(imageData);
-    const numRegisterTokens = extractor.model.config.num_register_tokens ?? 0;
-    const startIndex = 1 + numRegisterTokens;
-    const patchFeatures = features.slice(null, [startIndex, null]);
-    const normalizedFeatures = patchFeatures.normalize(2, -1);
-    const scores = await matmul(normalizedFeatures, normalizedFeatures.permute(0, 2, 1));
-    const similarityScores = (await scores.tolist())[0];
-
-    patchSimScoresRef.current = similarityScores
+    // send to webworker, wait for it
+    patchSimScoresRef.current = await dinoRef.current.process(imageData);
 
     setImageProcessed(true)
     setBusy(false)
-    setStatus(`Done (${similarityScores.length} patches). Move around`)
+    setStatus(`Done (${patchSimScoresRef.current.length} patches). Move around`)
   }
 
   // redraw canvas from offscreen canvas (=original image)
@@ -125,8 +114,8 @@ export default function HomePage() {
     setBusy(true)
     setStatus("Loading DINO ..")
 
-    const dino = new Dino()
-    const { patchSize, device, dtype } = await dino.waitForModelReady()
+    dinoRef.current = new Dino()
+    const { patchSize, device, dtype } = await dinoRef.current.waitForModelReady()
 
     setStatus(`Model ready on device ${device} (${dtype}) patch size ${patchSize}. Select an image.`);
     setModelReady(true)
