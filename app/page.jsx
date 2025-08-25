@@ -11,6 +11,8 @@ import { pipeline, RawImage, matmul, env } from "@huggingface/transformers"
 const MODEL_ID = "onnx-community/dinov3-vits16-pretrain-lvd1689m-ONNX";
 const PATCH_SIZE = 16
 
+import Dino from "@/lib/dino"
+
 export default function HomePage() {
 
   // ui state
@@ -123,27 +125,11 @@ export default function HomePage() {
     setBusy(true)
     setStatus("Loading DINO ..")
 
-    try {
-      const isWebGpuSupported = !!navigator.gpu;
-      const extractor = await pipeline("image-feature-extraction", MODEL_ID,
-       {
-        "device": isWebGpuSupported ? "webgpu" : "wasm",
-        "dtype": "q4",
-      });
-      extractorRef.current = extractor
-      extractor.processor.image_processor.do_resize = false;
-      const patchSize = extractor.model.config.patch_size;
-      const device = extractor.model.sessions.model.config.device
-      const dtype = extractor.model.sessions.model.config.dtype
+    const dino = new Dino()
+    const { patchSize, device, dtype } = await dino.waitForModelReady()
 
-      setStatus(`Model ready on device ${device} (${dtype}) patch size ${patchSize}. Select an image.`);
-      setModelReady(true)
-    } 
-    catch (error) {
-      setStatus("Failed to load the model: " + error.toString());
-      console.error("Model loading error:", error);
-    }
-
+    setStatus(`Model ready on device ${device} (${dtype}) patch size ${patchSize}. Select an image.`);
+    setModelReady(true)
     setBusy(false)
   }
 
