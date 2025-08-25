@@ -6,7 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
   title: 'DINOv3 Demo',
-  description: 'Next.JS app using Meta\ss DINOv3 and transformer.js',
+  description: 'Next.JS app using Meta\'s DINOv3 and transformer.js',
   generator: 'v0.app',
 }
 
