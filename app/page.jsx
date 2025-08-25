@@ -138,8 +138,9 @@ export default function HomePage() {
 
       setStatus(`Model ready on device ${device} (${dtype}) patch size ${patchSize}. Select an image.`);
       setModelReady(true)
-    } catch (error) {
-      setStatus("Failed to load the model. Please refresh.");
+    } 
+    catch (error) {
+      setStatus("Failed to load the model: " + error.toString());
       console.error("Model loading error:", error);
     }
 
